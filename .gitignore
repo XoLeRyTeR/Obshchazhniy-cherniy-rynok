@@ -9,3 +9,25 @@ web-build/
 *.tsbuildinfo
 playwright-report/
 test-results/
+
+# Local dependency caches
+/--no-audit/
+.cache/
+
+# IDE settings
+.idea/
+*.iml
+
+# Generated screenshots, reports and temporary files
+/artifacts/
+/.tmp*/
+tmp/
+temp/
+*.tmp
+*.log
+pytest-cache-files-*/
+pytest-tmp-*/
+
+# OS files
+.DS_Store
+Thumbs.db
