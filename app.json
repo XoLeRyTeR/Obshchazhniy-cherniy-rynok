@@ -1,0 +1,25 @@
+{
+  "expo": {
+    "name": "Общажный ЧР",
+    "slug": "obschazhny-market",
+    "scheme": "obschazhny",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "android": {
+      "package": "ru.obschazhny.market",
+      "softwareKeyboardLayoutMode": "resize"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Выберите фотографии для объявления.",
+          "microphonePermission": false
+        }
+      ]
+    ],
+    "web": { "bundler": "metro", "output": "single" }
+  }
+}
