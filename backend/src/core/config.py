@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore", hide_input_in_errors=True)
     database_url: SecretStr
     jwt_secret: SecretStr
+    seed_demo_data: bool = True
     access_token_ttl: int = Field(default=604800, ge=60)
     cors_origins: list[str] = ["http://localhost:8081", "http://127.0.0.1:8081"]
     media_dir: Path = Path("uploads")
@@ -18,14 +19,14 @@ class Settings(BaseSettings):
 
     @field_validator("jwt_secret")
     @classmethod
-    def secret_length(cls, value):
+    def secret_length(cls, value: SecretStr) -> SecretStr:
         if len(value.get_secret_value()) < 32:
             raise ValueError("JWT_SECRET must have at least 32 characters")
         return value
 
     @field_validator("database_url")
     @classmethod
-    def postgres_url(cls, value):
+    def postgres_url(cls, value: SecretStr) -> SecretStr:
         if not value.get_secret_value().startswith("postgresql+asyncpg://"):
             raise ValueError("DATABASE_URL must use postgresql+asyncpg")
         return value

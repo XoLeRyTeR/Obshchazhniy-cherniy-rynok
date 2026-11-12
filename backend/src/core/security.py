@@ -5,6 +5,7 @@ import jwt
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError
 
+from src.core.config import Settings
 from src.core.errors import unauthorized
 
 hasher = PasswordHasher()
@@ -19,7 +20,7 @@ def verify_password(password: str, password_hash: str) -> bool:
         return False
 
 
-def issue_token(user_id: UUID, settings) -> str:
+def issue_token(user_id: UUID, settings: Settings) -> str:
     now = int(datetime.now(timezone.utc).timestamp())
     return jwt.encode(
         {"sub": str(user_id), "iat": now, "exp": now + settings.access_token_ttl,
@@ -28,7 +29,7 @@ def issue_token(user_id: UUID, settings) -> str:
     )
 
 
-def read_token(token: str, settings) -> UUID:
+def read_token(token: str, settings: Settings) -> UUID:
     try:
         data = jwt.decode(token, settings.jwt_secret.get_secret_value(), algorithms=["HS256"],
                           options={"require": ["sub", "iat", "exp", "jti"]})

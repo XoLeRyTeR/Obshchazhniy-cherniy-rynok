@@ -1,36 +1,40 @@
-from sqlalchemy import exists, or_, select
+from uuid import UUID
+
+from sqlalchemy import Select, exists, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from src.models import Chat, Dormitory, Listing
+from src.models import Chat, Dormitory, Listing, ListingStatus
+from src.schemas.listings import ListingQuery
 
 
 class ListingRepository:
     """Извлекает объявления со связями, применяет фильтры, сортировку и блокировки строк."""
 
-    def __init__(self, session):
+    def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
     @staticmethod
-    def query():
+    def query() -> Select[tuple[Listing]]:
         """Строит базовый запрос с пакетной загрузкой автора, фото, общежития и вуза."""
         return select(Listing).options(
             selectinload(Listing.owner), selectinload(Listing.photos),
             selectinload(Listing.dormitory).selectinload(Dormitory.university),
         ).execution_options(populate_existing=True)
 
-    async def get(self, listing_id, lock=False):
+    async def get(self, listing_id: UUID, lock: bool = False) -> Listing | None:
         query = self.query().where(Listing.id == listing_id)
         if lock:
             query = query.with_for_update(of=Listing)
         return await self.session.scalar(query)
 
-    async def has_chat(self, listing_id, user_id):
+    async def has_chat(self, listing_id: UUID, user_id: UUID) -> bool:
         """Проверяет наличие чата покупателя по объявлению для проверки доступа к истории."""
         return await self.session.scalar(select(exists().where(
             Chat.listing_id == listing_id, Chat.buyer_id == user_id
         )))
 
-    async def feed(self, params, offset, size):
+    async def feed(self, params: ListingQuery, offset: int, size: int) -> list[Listing]:
         """Выбирает страницу активных/забронированных объявлений с фильтрами и поиском.
 
         Символы % и _ в поиске считаются обычными символами, а не шаблонами SQL LIKE.
@@ -49,7 +53,7 @@ class ListingRepository:
         query = query.order_by(Listing.created_at.desc(), Listing.id.desc()).offset(offset).limit(size)
         return list((await self.session.scalars(query)).all())
 
-    async def own(self, user_id, status, offset, size):
+    async def own(self, user_id: UUID, status: ListingStatus | None, offset: int, size: int) -> list[Listing]:
         """Выбирает страницу объявлений автора от новых к старым с необязательным статусом."""
         query = self.query().where(Listing.owner_id == user_id)
         if status:

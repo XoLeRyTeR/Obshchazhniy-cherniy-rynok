@@ -12,7 +12,7 @@ Auth = Annotated[AuthService, Depends(service(AuthService))]
 
 
 @router.post("/register", response_model=AuthOut, status_code=201)
-async def register(data: Register, auth: Auth):
+async def register(data: Register, auth: Auth) -> AuthOut:
     """Регистрирует пользователя с выбранным общежитием и возвращает JWT и профиль.
 
     Почта должна быть свободна; общежитие можно выбрать по ID или указать названием внутри вуза.
@@ -21,7 +21,7 @@ async def register(data: Register, auth: Auth):
 
 
 @router.post("/login", response_model=AuthOut)
-async def login(data: Login, auth: Auth):
+async def login(data: Login, auth: Auth) -> AuthOut:
     """Проверяет почту и пароль, возвращает JWT и профиль; неверные данные дают 401."""
     return await auth.login(data)
 

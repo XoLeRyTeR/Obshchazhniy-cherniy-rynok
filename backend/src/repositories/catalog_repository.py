@@ -1,5 +1,8 @@
+from uuid import UUID
+
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models import Dormitory, University
 
@@ -7,16 +10,16 @@ from src.models import Dormitory, University
 class CatalogRepository:
     """Работает со справочниками вузов и общежитий, включая поиск или создание общежития."""
 
-    def __init__(self, session):
+    def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    async def get_dorm(self, dormitory_id):
+    async def get_dorm(self, dormitory_id: UUID) -> Dormitory | None:
         return await self.session.get(Dormitory, dormitory_id)
 
-    async def get_university(self, university_id):
+    async def get_university(self, university_id: UUID) -> University | None:
         return await self.session.get(University, university_id)
 
-    async def resolve_dorm(self, university_id, name):
+    async def resolve_dorm(self, university_id: UUID, name: str) -> UUID:
         """Возвращает ID существующего общежития либо атомарно создаёт новое.
 
         Уникальность нормализованного имени в пределах вуза защищает от параллельных дублей.
@@ -29,12 +32,12 @@ class CatalogRepository:
         ).returning(Dormitory.id)
         return await self.session.scalar(statement)
 
-    async def universities(self, offset, size):
+    async def universities(self, offset: int, size: int) -> list[University]:
         """Выбирает страницу вузов в порядке нормализованного имени, затем ID."""
         query = select(University).order_by(University.name_key, University.id).offset(offset).limit(size)
         return list((await self.session.scalars(query)).all())
 
-    async def dormitories(self, university_id, offset, size):
+    async def dormitories(self, university_id: UUID, offset: int, size: int) -> list[Dormitory]:
         """Выбирает страницу общежитий одного вуза в алфавитном порядке."""
         query = (
             select(Dormitory)

@@ -1,4 +1,4 @@
-"""Explicit maintenance commands, never executed during API startup."""
+"""Ручные команды справочников и очистки файлов; демо-наполнение выполняется отдельно при старте API."""
 import argparse
 import asyncio
 
@@ -11,7 +11,7 @@ from src.repositories.db_repository import DbRepository
 from src.services.photo_service import PhotoService
 
 
-async def run(args):
+async def run(args: argparse.Namespace) -> None:
     settings = Settings()
     db = Database(settings.database_url.get_secret_value())
     try:

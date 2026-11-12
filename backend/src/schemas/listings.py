@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Self
 from uuid import UUID
 
 from pydantic import Field, field_validator, model_validator
@@ -19,7 +20,7 @@ class ListingCreate(Schema):
     dormitory_id: UUID | None = None
 
     @model_validator(mode="after")
-    def valid_price(self):
+    def valid_price(self) -> Self:
         if ((self.format == ListingFormat.SELL and self.price == 0) or
                 (self.format in (ListingFormat.GIVE, ListingFormat.EXCHANGE) and self.price != 0)):
             raise ValueError("Цена не соответствует формату")
@@ -51,7 +52,7 @@ class ListingQuery(PageQuery):
 
     @field_validator("q", mode="before")
     @classmethod
-    def trim_query(cls, value):
+    def trim_query(cls, value: object) -> object:
         return value.strip() or None if isinstance(value, str) else value
 
 

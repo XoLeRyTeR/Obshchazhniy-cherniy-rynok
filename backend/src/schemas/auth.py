@@ -1,3 +1,5 @@
+from typing import Self
+
 from pydantic import EmailStr, Field, field_validator, model_validator
 
 from src.schemas.common import Schema
@@ -10,12 +12,12 @@ class Login(Schema):
 
     @field_validator("email", mode="before")
     @classmethod
-    def normalize_email(cls, value):
+    def normalize_email(cls, value: object) -> object:
         return value.strip().lower() if isinstance(value, str) else value
 
     @field_validator("password")
     @classmethod
-    def not_blank(cls, value):
+    def not_blank(cls, value: str) -> str:
         if not value.strip():
             raise ValueError("Пароль не может состоять из пробелов")
         return value
@@ -26,11 +28,11 @@ class Register(Login, DormChoice):
 
     @field_validator("name", mode="before")
     @classmethod
-    def normalize_name(cls, value):
+    def normalize_name(cls, value: object) -> object:
         return " ".join(value.split()) if isinstance(value, str) else value
 
     @model_validator(mode="after")
-    def dorm_required(self):
+    def dorm_required(self) -> Self:
         if not self.dormitory_id and not self.university_id:
             raise ValueError("Укажите общежитие")
         return self

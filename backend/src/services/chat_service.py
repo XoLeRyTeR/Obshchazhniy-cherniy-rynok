@@ -1,8 +1,14 @@
-from datetime import datetime, timedelta, timezone
+from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+from uuid import UUID
+
+from src.core.config import Settings
 from src.core.errors import AppError, missing
 from src.models import Chat, ChatRead, Message
-from src.schemas.chats import MessageOut, ReadOut
+from src.repositories.db_repository import DbRepository
+from src.schemas.chats import ChatOut, MessageCreate, MessageOut, ReadOut
+from src.schemas.common import PageQuery
 from src.services.listing_service import ListingService
 from src.services.views import chat
 
@@ -10,11 +16,11 @@ from src.services.views import chat
 class ChatService:
     """Управляет перепиской: проверяет участников, повторы отправки и прочтение."""
 
-    def __init__(self, db, settings):
+    def __init__(self, db: DbRepository, settings: Settings) -> None:
         """Принимает репозитории и настройки приложения."""
         self.db, self.settings = db, settings
 
-    async def accessible(self, chat_id, user_id, lock=False):
+    async def accessible(self, chat_id: UUID, user_id: UUID, lock: bool = False) -> Chat:
         """Возвращает чат только покупателю или автору объявления, иначе выдаёт 404.
 
         При изменениях lock=True блокирует строку чата до завершения транзакции.
@@ -24,12 +30,12 @@ class ChatService:
             raise missing()
         return item
 
-    async def summary(self, chat_id, user_id):
+    async def summary(self, chat_id: UUID, user_id: UUID) -> ChatOut:
         """Формирует карточку одного чата с собеседником, превью и непрочитанными."""
         row = await self.db.chats.summary(chat_id, user_id)
         return chat(row, user_id)
 
-    async def create(self, listing_id, user_id):
+    async def create(self, listing_id: UUID, user_id: UUID) -> tuple[ChatOut, bool]:
         """Создаёт чат по объявлению или возвращает существующий и признак создания.
 
         Запрещает чат с самим собой; новый чат разрешён для активной или забронированной вещи.
@@ -47,18 +53,18 @@ class ChatService:
         await self.db.save()
         return await self.summary(new_chat.id, user_id), True
 
-    async def list(self, user_id, params):
+    async def list(self, user_id: UUID, params: PageQuery) -> dict[str, list[ChatOut]]:
         """Возвращает страницу чатов пользователя от наиболее активных к старым."""
         rows = await self.db.chats.list(user_id, params.offset, params.size)
         return {"items": [chat(row, user_id) for row in rows]}
 
-    async def history(self, chat_id, user_id, params):
+    async def history(self, chat_id: UUID, user_id: UUID, params: PageQuery) -> dict[str, list[MessageOut]]:
         """Проверяет участие в чате и возвращает страницу сообщений от новых к старым."""
         await self.accessible(chat_id, user_id)
         items = await self.db.chats.messages(chat_id, params.offset, params.size)
         return {"items": [MessageOut.model_validate(item) for item in items]}
 
-    async def send(self, chat_id, user_id, data):
+    async def send(self, chat_id: UUID, user_id: UUID, data: MessageCreate) -> tuple[MessageOut, bool]:
         """Сохраняет сообщение участника и возвращает его вместе с признаком создания.
 
         Повтор с тем же client_message_id и текстом не создаёт дубль; другой текст даёт 409.
@@ -80,7 +86,7 @@ class ChatService:
         await self.db.save()
         return MessageOut.model_validate(message), True
 
-    async def read(self, chat_id, user_id, message_id):
+    async def read(self, chat_id: UUID, user_id: UUID, message_id: UUID) -> ReadOut:
         """Отмечает сообщения прочитанными до указанного сообщения этого же чата.
 
         Метка движется только вперёд: запоздавший запрос не возвращает непрочитанные.

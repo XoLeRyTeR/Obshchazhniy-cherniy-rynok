@@ -6,53 +6,54 @@ from fastapi import APIRouter, Depends, File, Query, Request, Response, UploadFi
 from src.api.dependencies.auth import current_user
 from src.api.dependencies.services import service
 from src.core.errors import AppError
+from src.models import User as UserModel
 from src.schemas.common import Page
 from src.schemas.listings import ListingCreate, ListingOut, ListingPatch, ListingQuery, PhotoOut, StatusChange
 from src.services.listing_service import ListingService
 from src.services.photo_service import PhotoService
 
 router = APIRouter(prefix="/listings", tags=["Объявления"])
-User = Annotated[object, Depends(current_user)]
+User = Annotated[UserModel, Depends(current_user)]
 Listings = Annotated[ListingService, Depends(service(ListingService))]
 Photos = Annotated[PhotoService, Depends(service(PhotoService))]
 
 
-@router.get("", response_model=Page[ListingOut])
-async def feed(user: User, params: Annotated[ListingQuery, Query()], listings: Listings):
+@router.get("", response_model=Page[ListingOut], dependencies=[Depends(current_user)])
+async def feed(params: Annotated[ListingQuery, Query()], listings: Listings) -> dict[str, list[ListingOut]]:
     """Возвращает авторизованному пользователю страницу активных и забронированных объявлений.
 
     Поддерживает поиск, фильтры категории/формата/вуза/общежития и offset/size; новые идут первыми.
     """
-    return await listings.feed(user.id, params)
+    return await listings.feed(params)
 
 
 @router.post("", response_model=ListingOut, status_code=201)
-async def create(data: ListingCreate, user: User, listings: Listings):
+async def create(data: ListingCreate, user: User, listings: Listings) -> ListingOut:
     """Публикует объявление от имени текущего пользователя и возвращает созданную запись с 201."""
     return await listings.create(user, data)
 
 
 @router.get("/{listing_id}", response_model=ListingOut)
-async def detail(listing_id: UUID, user: User, listings: Listings):
+async def detail(listing_id: UUID, user: User, listings: Listings) -> ListingOut:
     """Возвращает подробности доступного объявления с автором и фото; недоступное даёт 404."""
     return await listings.detail(listing_id, user.id)
 
 
 @router.patch("/{listing_id}", response_model=ListingOut)
-async def edit(listing_id: UUID, data: ListingPatch, user: User, listings: Listings):
+async def edit(listing_id: UUID, data: ListingPatch, user: User, listings: Listings) -> ListingOut:
     """Частично обновляет объявление только его автору, проверяя формат, цену и общежитие."""
     return await listings.update(listing_id, user.id, data)
 
 
 @router.patch("/{listing_id}/status", response_model=ListingOut)
-async def status(listing_id: UUID, data: StatusChange, user: User, listings: Listings):
+async def status(listing_id: UUID, data: StatusChange, user: User, listings: Listings) -> ListingOut:
     """Меняет статус объявления только автору; неверный переход или expected_status даёт 409."""
     return await listings.status(listing_id, user.id, data)
 
 
 @router.post("/{listing_id}/photos", response_model=PhotoOut, status_code=201)
 async def upload_photo(listing_id: UUID, request: Request, user: User, photos: Photos,
-                       file: Annotated[UploadFile, File()]):
+                       file: Annotated[UploadFile, File()]) -> PhotoOut:
     """Добавляет автору одну фотографию из multipart-поля file и возвращает её описание с 201.
 
     Допустимы статичные JPEG/PNG/WebP до 5 МБ, не более пяти фото на объявление.
@@ -67,7 +68,7 @@ async def upload_photo(listing_id: UUID, request: Request, user: User, photos: P
 
 
 @router.delete("/{listing_id}/photos/{photo_id}", status_code=204)
-async def delete_photo(listing_id: UUID, photo_id: UUID, user: User, photos: Photos):
+async def delete_photo(listing_id: UUID, photo_id: UUID, user: User, photos: Photos) -> Response:
     """Удаляет фотографию объявления только автору; успешный ответ — 204 без тела."""
     await photos.delete(listing_id, photo_id, user.id)
     return Response(status_code=204)

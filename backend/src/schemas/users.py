@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Self
 from uuid import UUID
 
 from pydantic import field_validator, model_validator
@@ -15,11 +16,11 @@ class DormChoice(Schema):
 
     @field_validator("dormitory_name", mode="before")
     @classmethod
-    def normalize_dorm(cls, value):
+    def normalize_dorm(cls, value: object) -> object:
         return " ".join(value.split()) if isinstance(value, str) else value
 
     @model_validator(mode="after")
-    def valid_choice(self):
+    def valid_choice(self) -> Self:
         if any(getattr(self, k) is None for k in self.model_fields_set
                if k in {"dormitory_id", "university_id", "dormitory_name"}):
             raise ValueError("Общежитие не может быть null")
@@ -36,7 +37,7 @@ class ProfilePatch(DormChoice, Patch):
 
     @field_validator("name", mode="before")
     @classmethod
-    def normalize_name(cls, value):
+    def normalize_name(cls, value: object) -> object:
         return " ".join(value.split()) if isinstance(value, str) else value
 
 

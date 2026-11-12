@@ -4,7 +4,7 @@ import { type ApiListing,type Listing,type Status,mapListing,useListings } from 
 
 /** Меняет статус с expected_status и обновляет кеш, в том числе после конфликта. */
 export function useChangeListingStatus() {
-  const { cache,getListing }=useListings();
+  const { cache, getListing }=useListings();
   return useCallback(
     /** Отправляет новый и ожидаемый статусы объявления, обновляет кеш и передаёт ошибку вызывающему коду. */
     async function changeStatus(item: Listing,status: Status) {

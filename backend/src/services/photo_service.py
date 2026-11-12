@@ -3,12 +3,16 @@ import io
 import logging
 import re
 import warnings
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from PIL import Image, UnidentifiedImageError
+from starlette.datastructures import UploadFile
 
+from src.core.config import Settings
 from src.core.errors import AppError, missing
 from src.models import ListingPhoto
+from src.repositories.db_repository import DbRepository
+from src.schemas.listings import PhotoOut
 from src.services.listing_service import ListingService
 from src.services.views import photo
 
@@ -17,7 +21,7 @@ KEY_PATTERN = re.compile(r"^[a-zA-Z0-9_-]+\.(jpg|jpeg|png|webp)$")
 logger = logging.getLogger(__name__)
 
 
-def validate_image(data, content_type):
+def validate_image(data: bytes, content_type: str | None) -> str:
     """Проверяет содержимое, MIME, размеры и декодирование статичного изображения.
 
     Возвращает расширение JPEG/PNG/WebP; неверный формат даёт 415, повреждение или размеры — 422.
@@ -48,11 +52,11 @@ def validate_image(data, content_type):
 class PhotoService:
     """Согласует файлы фотографий с записями БД, проверяет загрузки и удаляет сироты."""
 
-    def __init__(self, db, settings):
+    def __init__(self, db: DbRepository, settings: Settings) -> None:
         """Принимает репозитории и настройки каталога и публичных URL фотографий."""
         self.db, self.settings = db, settings
 
-    async def add(self, listing_id, user_id, upload):
+    async def add(self, listing_id: UUID, user_id: UUID, upload: UploadFile) -> PhotoOut:
         """Добавляет автору фото до 5 МБ, проверяя изображение и лимит пяти фото.
 
         Сохраняет файл под случайным именем; при сбое удаляет его только после проверки БД.
@@ -93,7 +97,7 @@ class PhotoService:
             raise
         return photo(record, self.settings)
 
-    async def delete(self, listing_id, photo_id, user_id):
+    async def delete(self, listing_id: UUID, photo_id: UUID, user_id: UUID) -> None:
         """Проверяет авторство, удаляет запись фото и затем файл после успешного commit.
 
         Если файл удалить не удалось, его уберёт последующая очистка сирот.
@@ -111,7 +115,7 @@ class PhotoService:
         except OSError:
             logger.warning("Deleted image scheduled for orphan cleanup")
 
-    async def cleanup(self):
+    async def cleanup(self) -> int:
         """Удаляет файлы допустимого имени без записи в БД и возвращает их количество.
 
         Общая блокировка с загрузкой не даёт удалить ещё не сохранённую фотографию.

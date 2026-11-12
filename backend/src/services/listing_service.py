@@ -1,8 +1,12 @@
+from uuid import UUID
+
 from pydantic import ValidationError
 
+from src.core.config import Settings
 from src.core.errors import AppError, missing
-from src.models import Listing, ListingFormat, ListingStatus
-from src.schemas.listings import ListingCreate
+from src.models import Listing, ListingFormat, ListingStatus, User
+from src.repositories.db_repository import DbRepository
+from src.schemas.listings import ListingCreate, ListingOut, ListingPatch, ListingQuery, OwnQuery, StatusChange
 from src.services.views import listing
 
 TRANSITIONS = {"active": {"reserved", "archived"}, "reserved": {"active", "completed"},
@@ -12,11 +16,11 @@ TRANSITIONS = {"active": {"reserved", "archived"}, "reserved": {"active", "compl
 class ListingService:
     """Применяет правила публикации объявлений, доступа, редактирования и смены статусов."""
 
-    def __init__(self, db, settings):
+    def __init__(self, db: DbRepository, settings: Settings) -> None:
         """Принимает репозитории и настройки для формирования ответов с фотографиями."""
         self.db, self.settings = db, settings
 
-    async def accessible(self, listing_id, user_id, edit=False, lock=False):
+    async def accessible(self, listing_id: UUID, user_id: UUID, edit: bool = False, lock: bool = False) -> Listing:
         """Проверяет видимость объявления и, при edit=True, право автора на изменение.
 
         Снятые и завершённые объявления видны автору и покупателям с существующим чатом.
@@ -32,7 +36,7 @@ class ListingService:
             raise AppError(403, "not_owner", "Изменять объявление может только автор")
         return item
 
-    async def feed(self, user_id, params):
+    async def feed(self, params: ListingQuery) -> dict[str, list[ListingOut]]:
         """Проверяет совместимость фильтров вуза/общежития и возвращает страницу ленты."""
         if params.university_id and params.dormitory_id:
             dorm = await self.db.catalog.get_dorm(params.dormitory_id)
@@ -41,12 +45,12 @@ class ListingService:
         items = await self.db.listings.feed(params, params.offset, params.size)
         return {"items": [listing(item, self.settings) for item in items]}
 
-    async def own(self, user_id, params):
+    async def own(self, user_id: UUID, params: OwnQuery) -> dict[str, list[ListingOut]]:
         """Возвращает страницу собственных объявлений, при необходимости по статусу."""
         items = await self.db.listings.own(user_id, params.status, params.offset, params.size)
         return {"items": [listing(item, self.settings) for item in items]}
 
-    async def create(self, user, data):
+    async def create(self, user: User, data: ListingCreate) -> ListingOut:
         """Публикует объявление от имени пользователя с выбранным или его текущим общежитием."""
         values = data.model_dump(exclude_none=True)
         dorm_id = values.setdefault("dormitory_id", user.dormitory_id)
@@ -57,11 +61,11 @@ class ListingService:
         await self.db.save()
         return listing(await self.db.listings.get(item.id), self.settings)
 
-    async def detail(self, listing_id, user_id):
+    async def detail(self, listing_id: UUID, user_id: UUID) -> ListingOut:
         """Возвращает подробности объявления после проверки его доступности пользователю."""
         return listing(await self.accessible(listing_id, user_id), self.settings)
 
-    async def update(self, listing_id, user_id, data):
+    async def update(self, listing_id: UUID, user_id: UUID, data: ListingPatch) -> ListingOut:
         """Изменяет поля объявления только автору, проверяя итоговое сочетание формата и цены.
 
         Переход к услуге запрещён, пока вещь забронирована или передана.
@@ -82,7 +86,7 @@ class ListingService:
         await self.db.save()
         return listing(await self.db.listings.get(item.id), self.settings)
 
-    async def status(self, listing_id, user_id, data):
+    async def status(self, listing_id: UUID, user_id: UUID, data: StatusChange) -> ListingOut:
         """Меняет статус автору, если исходный статус совпадает и переход разрешён.
 
         Для услуги допустимы только active/archived; устаревший запрос отклоняется с 409.

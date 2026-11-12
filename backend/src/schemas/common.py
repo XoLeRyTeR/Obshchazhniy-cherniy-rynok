@@ -1,9 +1,10 @@
-from typing import Annotated, Generic, TypeVar
+from typing import Annotated, Any, Generic, Self, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 
-def clean_text(max_length: int):
+def clean_text(max_length: int) -> Any:
+    """Создаёт динамический Annotated-тип для Pydantic, а не строковое значение."""
     return Annotated[str, StringConstraints(strict=True, strip_whitespace=True,
                                             min_length=1, max_length=max_length)]
 
@@ -14,7 +15,7 @@ class Schema(BaseModel):
 
 class Patch(Schema):
     @model_validator(mode="after")
-    def not_empty(self):
+    def not_empty(self) -> Self:
         if not self.model_fields_set or any(getattr(self, k) is None for k in self.model_fields_set):
             raise ValueError("Передайте хотя бы одно поле без null")
         return self

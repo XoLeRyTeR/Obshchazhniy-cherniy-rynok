@@ -7,12 +7,14 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from src.api.dependencies.db import get_db
 from src.core.errors import AppError, unauthorized
 from src.core.security import read_token
+from src.models import User
+from src.repositories.db_repository import DbRepository
 
 bearer = HTTPBearer(auto_error=False)
 
 
 async def current_user(request: Request, credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
-                       db=Depends(get_db)):
+                       db: DbRepository = Depends(get_db)) -> User:
     if credentials is None or credentials.scheme.lower() != "bearer":
         raise unauthorized()
     user_id = read_token(credentials.credentials, request.app.state.settings)
@@ -22,7 +24,7 @@ async def current_user(request: Request, credentials: HTTPAuthorizationCredentia
     return user
 
 
-async def auth_rate(request: Request):
+async def auth_rate(request: Request) -> None:
     settings = request.app.state.settings
     now = monotonic()
     buckets = request.app.state.auth_buckets

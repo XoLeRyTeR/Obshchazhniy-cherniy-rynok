@@ -7,7 +7,7 @@
     "start": "expo start --lan",
     "android": "expo start --android",
     "web": "expo start --web",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tests/tsconfig.json",
     "test": "node --experimental-strip-types --experimental-test-isolation=none --test tests/*.test.ts"
   },
   "dependencies": {

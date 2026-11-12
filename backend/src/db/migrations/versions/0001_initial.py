@@ -1,4 +1,7 @@
 """Initial schema: eight marketplace tables. Frozen independently of ORM models."""
+from datetime import datetime
+from uuid import UUID
+
 from alembic import op
 import sqlalchemy as sa
 
@@ -8,15 +11,15 @@ branch_labels = None
 depends_on = None
 
 
-def identity():
+def identity() -> sa.Column[UUID]:
     return sa.Column("id", sa.Uuid(), server_default=sa.text("gen_random_uuid()"), nullable=False)
 
 
-def created():
+def created() -> sa.Column[datetime]:
     return sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False)
 
 
-def upgrade():
+def upgrade() -> None:
     op.create_table("universities",
         sa.Column("name", sa.String(200), nullable=False),
         sa.Column("name_key", sa.Text(), sa.Computed("lower(btrim(regexp_replace(name, '[[:space:]]+', ' ', 'g')))", persisted=True), nullable=False),
@@ -112,6 +115,6 @@ def upgrade():
     op.create_index("ix_chat_reads_user_id", "chat_reads", ["user_id"])
 
 
-def downgrade():
+def downgrade() -> None:
     for table in ("chat_reads", "messages", "listing_photos", "chats", "listings", "users", "dormitories", "universities"):
         op.drop_table(table)

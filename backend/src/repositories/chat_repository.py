@@ -1,16 +1,29 @@
-from sqlalchemy import and_, func, or_, select, tuple_
+from __future__ import annotations
+
+from datetime import datetime
+from typing import TypeAlias
+from uuid import UUID
+
+from sqlalchemy import Row, Select, and_, func, or_, select, tuple_
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased, selectinload
+from sqlalchemy.sql import Subquery
+from sqlalchemy.sql.elements import Label
 
 from src.models import Chat, ChatRead, Listing, Message
+
+# Строка превью: чат, последняя активность, последнее сообщение (либо None), непрочитанные.
+ChatSummaryRow: TypeAlias = Row[tuple[Chat, datetime, Message | None, int]]
+ChatSummaryQuery: TypeAlias = Select[tuple[Chat, datetime, Message | None, int]]
 
 
 class ChatRepository:
     """Извлекает чаты, сообщения и метки прочтения, собирает превью и счётчики для списка чатов."""
 
-    def __init__(self, session):
+    def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    async def get(self, chat_id, lock=False):
+    async def get(self, chat_id: UUID, lock: bool = False) -> Chat | None:
         query = select(Chat).where(Chat.id == chat_id).options(
             selectinload(Chat.listing), selectinload(Chat.buyer)
         ).execution_options(populate_existing=True)
@@ -18,27 +31,27 @@ class ChatRepository:
             query = query.with_for_update(of=Chat)
         return await self.session.scalar(query)
 
-    async def by_listing(self, listing_id, buyer_id):
+    async def by_listing(self, listing_id: UUID, buyer_id: UUID) -> Chat | None:
         return await self.session.scalar(select(Chat).where(
             Chat.listing_id == listing_id, Chat.buyer_id == buyer_id
         ))
 
-    async def repeated_message(self, chat_id, sender_id, key):
+    async def repeated_message(self, chat_id: UUID, sender_id: UUID, key: UUID) -> Message | None:
         """Ищет ранее отправленное сообщение по ключу повтора внутри чата и отправителя."""
         return await self.session.scalar(select(Message).where(
             Message.chat_id == chat_id, Message.sender_id == sender_id,
             Message.client_message_id == key,
         ))
 
-    async def message(self, chat_id, message_id):
+    async def message(self, chat_id: UUID, message_id: UUID) -> Message | None:
         return await self.session.scalar(select(Message).where(
             Message.chat_id == chat_id, Message.id == message_id
         ))
 
-    def _messages_query(self, chat_id):
+    def _messages_query(self, chat_id: UUID) -> Select[tuple[Message]]:
         return select(Message).where(Message.chat_id == chat_id)
 
-    async def messages(self, chat_id, offset, size):
+    async def messages(self, chat_id: UUID, offset: int, size: int) -> list[Message]:
         """Выбирает страницу истории от новых сообщений к старым; при равном времени сравнивает ID."""
         query = (
             self._messages_query(chat_id)
@@ -47,26 +60,26 @@ class ChatRepository:
         )
         return list((await self.session.scalars(query)).all())
 
-    async def latest(self, chat_id):
+    async def latest(self, chat_id: UUID) -> Message | None:
         return await self.session.scalar(self._messages_query(chat_id).order_by(
             Message.created_at.desc(), Message.id.desc()
         ).limit(1))
 
-    async def read_marker(self, chat_id, user_id):
+    async def read_marker(self, chat_id: UUID, user_id: UUID) -> ChatRead | None:
         return await self.session.get(ChatRead, (chat_id, user_id))
 
-    async def summary(self, chat_id, user_id):
+    async def summary(self, chat_id: UUID, user_id: UUID) -> ChatSummaryRow:
         """Извлекает одну строку превью доступного участнику чата для формирования ответа API."""
         query, _ = self._summaries_query(user_id)
         return (await self.session.execute(query.where(Chat.id == chat_id))).one()
 
-    async def list(self, user_id, offset, size):
+    async def list(self, user_id: UUID, offset: int, size: int) -> list[ChatSummaryRow]:
         """Выбирает страницу чатов участника по убыванию последней активности, затем ID."""
         query, activity = self._summaries_query(user_id)
         query = query.order_by(activity.desc(), Chat.id.desc()).offset(offset).limit(size)
         return list((await self.session.execute(query)).all())
 
-    def _summaries_query(self, user_id):
+    def _summaries_query(self, user_id: UUID) -> tuple[ChatSummaryQuery, Label[datetime]]:
         """Строит запрос чатов участника с последним сообщением и числом непрочитанных.
 
         Возвращает запрос и поле активности для сортировки; сам SQL здесь не выполняется.
@@ -88,7 +101,7 @@ class ChatRepository:
         return query, activity
 
     @staticmethod
-    def _ranked_messages():
+    def _ranked_messages() -> Subquery:
         """Строит подзапрос с нумерацией сообщений отдельно для каждого чата.
 
         Позиция 1 — самое новое; ID разрешает совпадения времени создания.
@@ -100,7 +113,7 @@ class ChatRepository:
         return select(Message.id, Message.chat_id, position.label("position")).subquery()
 
     @staticmethod
-    def _unread_counts(user_id):
+    def _unread_counts(user_id: UUID) -> Subquery:
         """Строит подзапрос количества чужих сообщений после метки прочтения в каждом чате.
 
         Без метки учитываются все чужие сообщения; свои сообщения не увеличивают счётчик.
